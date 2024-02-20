@@ -145,6 +145,7 @@ bsps=(
 "NVIDIA L4T 35.1.0 (https://developer.nvidia.com/embedded/jetson-linux-r351)"
 "NVIDIA L4T 35.2.1 (https://developer.nvidia.com/embedded/jetson-linux-r3521)"
 "NVIDIA L4T 35.3.1 (https://developer.nvidia.com/embedded/jetson-linux-r3531)"
+"NVIDIA L4T 35.4.1 (https://developer.nvidia.com/embedded/jetson-linux-r3541)"
 )
 
 bsps_keys=(
@@ -160,6 +161,7 @@ bsps_keys=(
 "35.1.0"
 "35.2.1"
 "35.3.1"
+"35.4.1"
 )
 
 choose_bsp() {
@@ -222,11 +224,11 @@ setup_driver() {
                 ;;
         XavierNX|XavierNXSD) 
                 choose_board 2 4 5
-                choose_bsp 1 2 3 4 5 6 7 9 10 11
+                choose_bsp 1 2 3 4 5 6 7 9 10 11 12
                 ;;
         AGXXavier)
                 choose_board 6
-                choose_bsp 0 1 2 3 4 5 6 7 9 10 11
+                choose_bsp 0 1 2 3 4 5 6 7 9 10 11 12
                 ;;
         TX2|TX2i)
                 choose_board 6
@@ -238,11 +240,11 @@ setup_driver() {
                 ;;
         OrinNano4GB_SD|OrinNano8GB_SD|OrinNano4GB_NVME|OrinNano8GB_NVME)
                 choose_board 3 5
-                choose_bsp 11
+                choose_bsp 11 12
                 ;;
         OrinNX8GB|OrinNX16GB)
                 choose_board 5
-                choose_bsp 10 11
+                choose_bsp 10 11 12
         esac
         check_configuration $1 $2
         write_configuration

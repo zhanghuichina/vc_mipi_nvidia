@@ -26,7 +26,7 @@ KERNEL_OUT=$KERNEL_SOURCE/build
 MODULES_OUT=$KERNEL_SOURCE/modules
 DRIVER_DST_DIR=$KERNEL_SOURCE/kernel/nvidia/drivers/media/i2c
 case $VC_MIPI_BSP in
-35.1.0|35.2.1|35.3.1)
+35.1.0|35.2.1|35.3.1|35.4.1)
         KERNEL_DIR=kernel/kernel-5.10/
         MODULES_BSP=$BSP_DIR/Linux_for_Tegra/rootfs/usr
         DTB_OUT=$KERNEL_OUT/arch/arm64/boot/dts/nvidia
@@ -168,6 +168,9 @@ AGXXavier|XavierNX|XavierNXSD|TX2|TX2i|TX2NX|OrinNano4GB_SD|OrinNano8GB_SD|OrinN
         35.3.1)
                 PATCHES+=('kernel_Xavier_35.3.1+')
                 ;;
+        35.4.1)
+                PATCHES+=('kernel_Xavier_35.4.1+')
+                ;;
         esac
         
 esac
@@ -211,7 +214,7 @@ XavierNX|XavierNXSD)
                 32.5.0|32.5.1|32.5.2|32.6.1|32.7.1|32.7.2|32.7.3)
                         PATCHES+=('dt_Auvidea_JNX30_XavierNX_32.5.0+')
                         ;;
-                35.1.0|35.2.1|35.3.1)
+                35.1.0|35.2.1|35.3.1|35.4.1)
                         # Comment
                 ;;
                 esac

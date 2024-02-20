@@ -203,6 +203,54 @@ setup_som_carrier_specifics() {
                         # Setting EPROM size to 100x0
                         sed -i 's/cvb_eeprom_read_size = <0x0>;/cvb_eeprom_read_size = <0x100>;/' ${EPROM_FILE}
                 fi
+
+                case $VC_MIPI_BSP in
+                35.4.1)
+                        GPIO_FILE=${BSP_DIR}/Linux_for_Tegra/bootloader/t186ref/BCT/tegra234-mb2-bct-scr-p3767-0000.dts
+                        if [ ! -e ${GPIO_FILE} ]
+                        then
+                                echo "Could not find ${GPIO_FILE}! (pwd $(pwd))"
+                                exit 1
+                        fi
+
+                        GPIO_PART_STR="reg@322 "
+
+                        GPIO_STR1="        reg@322 { /* GPIO_M_SCR_00_0 */"
+                        GPIO_STR2="            exclusion-info = <2>;"
+                        GPIO_STR3="            value = <0x38009696>;"
+                        GPIO_STR4="        };"
+
+                        FIND_RESULT=0
+                        FIND_RESULT=$(grep -q "${GPIO_PART_STR}" ${GPIO_FILE}; echo $?)
+
+                        if [[ "Auvidea_JNX42" = $VC_MIPI_BOARD ]]
+                        then
+                                if [[ 1 == $FIND_RESULT ]]
+                                then
+                                        echo "GPIO_M_SCR_00_0 missing, trying to insert..."
+
+                                        sed '/tfc {/r'<(
+                                                echo "$GPIO_STR1"
+                                                echo "$GPIO_STR2"
+                                                echo "$GPIO_STR3"
+                                                echo "$GPIO_STR4"
+                                                echo ""
+                                        ) -i -- ${GPIO_FILE}
+                                fi
+                        else
+                                if [[ 0 == $FIND_RESULT ]]
+                                then
+                                        echo "GPIO_M_SCR_00_0 already present, trying to remove..."
+
+                                        sed -i -e "/$GPIO_PART_STR/,+4d" ${GPIO_FILE}
+                                fi
+
+                        fi
+                        ;;
+                *)
+                        #nothing to do
+                        ;;
+                esac
                 ;;
         *)
                 return 0
@@ -253,7 +301,7 @@ create_target_user() {
         echo "Create target user ..."
         cd $BSP_DIR/Linux_for_Tegra
         case $VC_MIPI_BSP in
-        32.6.1|32.7.1|32.7.2|32.7.3|32.7.4|35.1.0|35.2.1|35.3.1)
+        32.6.1|32.7.1|32.7.2|32.7.3|32.7.4|35.1.0|35.2.1|35.3.1|35.4.1)
 
                 sudo ./tools/l4t_create_default_user.sh --username ${TARGET_USER} --password ${TARGET_PW} \
                         --hostname nvidia --autologin --accept-license
