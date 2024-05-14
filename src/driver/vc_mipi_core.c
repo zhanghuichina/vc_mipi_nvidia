@@ -61,6 +61,8 @@
 __u32 vc_core_calculate_max_exposure(struct vc_cam *cam, __u8 num_lanes, __u8 format);
 __u32 vc_core_calculate_max_frame_rate(struct vc_cam *cam, __u8 num_lanes, __u8 format);
 static __u32 vc_core_calculate_period_1H(struct vc_cam *cam, __u8 num_lanes, __u8 format);
+void vc_core_calculate_roi(struct vc_cam *cam, __u32 *w_left, __u32 *w_right, __u32 *w_width,
+        __u32 *w_top, __u32 *w_bottom, __u32 *w_height);
 
 static int vc_sen_read_image_size(struct vc_ctrl *ctrl, struct vc_frame *size);
 #ifdef READ_VMAX
@@ -101,7 +103,8 @@ static __u8 i2c_read_reg(struct device *dev, struct i2c_client *client, const __
                 return ret;
         }
 
-        vc_dbg(dev, "%s():   addr: 0x%04x => value: 0x%02x\n", func, addr, buf[0]);
+//bazo
+//        vc_dbg(dev, "%s():   addr: 0x%04x => value: 0x%02x\n", func, addr, buf[0]);
 
         return buf[0];
 }
@@ -125,6 +128,20 @@ static int i2c_write_reg(struct device *dev, struct i2c_client *client, const __
         ret = i2c_transfer(adap, &msg, 1);
 
         return ret == 1 ? 0 : -EIO;
+}
+
+int i2c_write_regs(struct i2c_client *client, const struct vc_reg *regs, const char* func)
+{
+        int i;
+
+        if (regs == NULL)
+                return -EINVAL;
+
+        for (i = 0; regs[i].address != 0; i++) {
+                i2c_write_reg(&client->dev, client, regs[i].address, regs[i].value, func);
+        }
+
+        return 0;
 }
 
 static __u32 i2c_read_reg2(struct device *dev, struct i2c_client *client, struct vc_csr2 *csr, const char* func)
@@ -446,6 +463,113 @@ __u32 vc_core_get_format(struct vc_cam *cam)
         return code;
 }
 
+void vc_core_limit_frame_position(struct vc_cam *cam, __u32 left, __u32 top)
+{
+        struct vc_ctrl *ctrl = &cam->ctrl;
+        struct vc_state *state = &cam->state;
+
+        if (left > ctrl->frame.width - state->frame.width) {
+                state->frame.left = ctrl->frame.width - state->frame.width;
+        } else {
+                state->frame.left = left;
+        }
+
+        if (top > ctrl->frame.height - state->frame.height) {
+                state->frame.top = ctrl->frame.height - state->frame.height;
+        } else {
+                state->frame.top = top;
+        }
+}
+
+void vc_core_limit_frame_size(struct vc_cam *cam, __u32 width, __u32 height)
+{
+        struct vc_ctrl *ctrl = &cam->ctrl;
+        struct vc_state *state = &cam->state;
+
+        if (width > ctrl->frame.width) {
+                state->frame.width = ctrl->frame.width;
+        } else {
+                state->frame.width = width;
+        }
+
+        if (height > ctrl->frame.height) {
+                state->frame.height = ctrl->frame.height;
+        } else {
+                state->frame.height = height;
+        }
+}
+
+int vc_core_set_frame(struct vc_cam *cam, __u32 left, __u32 top, __u32 width, __u32 height)
+{
+        struct vc_state *state = &cam->state;
+        struct device *dev = vc_core_get_sen_device(cam);
+
+        vc_notice(dev, "%s(): Set frame (left: %u, top: %u, width: %u, height: %u)\n", __FUNCTION__, left, top, width, height);
+
+        vc_core_limit_frame_size(cam, width, height);
+        vc_core_limit_frame_position(cam, left, top);
+
+        if (state->frame.left != left || state->frame.top != top || state->frame.width != width || state->frame.height != height) {
+                vc_warn(dev, "%s(): Adjusted frame (left: %u, top: %u, width: %u, height: %u)\n", __FUNCTION__,
+                state->frame.left, state->frame.top, state->frame.width, state->frame.height);
+        }
+
+        return 0;
+}
+
+int vc_core_set_frame_size(struct vc_cam *cam, __u32 width, __u32 height)
+{
+        struct vc_state *state = &cam->state;
+        struct device *dev = vc_core_get_sen_device(cam);
+
+        vc_notice(dev, "%s(): Set frame size (width: %u, height: %u)\n", __FUNCTION__, width, height);
+
+        vc_core_limit_frame_size(cam, width, height);
+
+        if (state->frame.width != width || state->frame.height != height) {
+                vc_warn(dev, "%s(): Adjusted frame size (width: %u, height: %u)\n", __FUNCTION__,
+                state->frame.width, state->frame.height);
+        }
+
+        return 0;
+}
+
+int vc_core_set_frame_position(struct vc_cam *cam, __u32 left, __u32 top)
+{
+        struct vc_ctrl *ctrl = &cam->ctrl;
+        struct vc_state *state = &cam->state;
+        struct i2c_client *client = ctrl->client_sen;
+        struct device *dev = vc_core_get_sen_device(cam);
+        int w_left, w_top, w_right, w_bottom, w_width, w_height;
+        int ret = 0;
+
+        vc_notice(dev, "%s(): Set frame position (left: %u, top: %u)\n", __FUNCTION__, left, top);
+
+        vc_core_limit_frame_position(cam, left, top);
+
+        if (state->frame.left != left || state->frame.top != top) {
+                vc_warn(dev, "%s(): Adjusted frame position (left: %u, top: %u)\n", __FUNCTION__,
+                state->frame.left, state->frame.top);
+        }
+
+        if(state->streaming) {
+                vc_core_calculate_roi(cam, &w_left, &w_right, &w_width, &w_top, &w_bottom, &w_height);
+
+                vc_notice(dev, "%s(): Write sensor position: (left: %u, top: %u)\n",
+                        __FUNCTION__, w_left, w_top);
+
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.h_start, w_left, __FUNCTION__);
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.h_end, w_right, __FUNCTION__);
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.v_start, w_top, __FUNCTION__);
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.v_end, w_bottom, __FUNCTION__);
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.w_width, w_width, __FUNCTION__);
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.w_height, w_height, __FUNCTION__);
+        }
+
+        return ret;
+}
+
+#if 0
 int vc_core_set_frame(struct vc_cam *cam, __u32 left, __u32 top, __u32 width, __u32 height)
 {
         struct vc_ctrl *ctrl = &cam->ctrl;
@@ -485,6 +609,7 @@ int vc_core_set_frame(struct vc_cam *cam, __u32 left, __u32 top, __u32 width, __
 
         return 0;
 }
+#endif
 
 struct vc_frame *vc_core_get_frame(struct vc_cam *cam)
 {
@@ -635,11 +760,12 @@ vc_mode vc_core_get_mode(struct vc_cam *cam, __u8 num_lanes, __u8 format)
         int index = 0;
         vc_mode tRet;
 
+        memset(&tRet, 0, sizeof(tRet));
+
         for (index = 0; index < 8; index++) {
                 if ( (num_lanes == ctrl->mode[index].num_lanes)
                   && (format == ctrl->mode[index].format) ) {
                         return ctrl->mode[index];
-                        //Nullpruefung!!
                   }
         }
 
@@ -651,7 +777,6 @@ vc_mode vc_core_get_mode(struct vc_cam *cam, __u8 num_lanes, __u8 format)
 vc_control vc_core_get_vmax(struct vc_cam *cam, __u8 num_lanes, __u8 format)
 {
         return vc_core_get_mode(cam, num_lanes, format).vmax;
-
 }
 
 vc_control vc_core_get_blacklevel(struct vc_cam *cam, __u8 num_lanes, __u8 format)
@@ -1271,6 +1396,237 @@ static int vc_sen_read_image_size(struct vc_ctrl *ctrl, struct vc_frame *size)
         return 0;
 }
 
+struct vc_binning *vc_core_get_binning(struct vc_cam *cam)
+{
+        struct vc_ctrl *ctrl = &cam->ctrl;
+        struct vc_state *state = &cam->state;
+        struct i2c_client *client = ctrl->client_sen;
+        struct device *dev = &client->dev;
+
+        if (state->binning_mode >= ARRAY_SIZE(ctrl->binnings)) {
+                vc_err(dev, "%s(): Invalid binning mode! \n", __FUNCTION__);
+                return NULL;
+        }
+
+        return &ctrl->binnings[state->binning_mode];
+}
+
+void vc_core_calculate_roi(struct vc_cam *cam, __u32 *left, __u32 *right, __u32 *width,
+        __u32 *top, __u32 *bottom, __u32 *height)
+{
+        struct vc_ctrl *ctrl = &cam->ctrl;
+        struct vc_state *state = &cam->state;
+        struct i2c_client *client = ctrl->client_sen;
+        struct device *dev = &client->dev;
+        struct vc_binning *binning = vc_core_get_binning(cam);
+
+        if (NULL == binning) {
+                vc_err(dev, "%s() Could not get binning struct!\n", __FUNCTION__);
+                return;
+        }
+
+        *left = ctrl->frame.left + state->frame.left;
+        *top = ctrl->frame.top + state->frame.top;
+        if ((binning->h_factor == 0) || (binning->v_factor == 0)) {
+                *width = state->frame.width;
+                *height = state->frame.height;
+
+        } else {
+                *width = state->frame.width * binning->h_factor;
+                *height = state->frame.height * binning->v_factor;
+        }
+        *right = *left + *width;
+        *bottom = *top + *height;
+
+        if (ctrl->flags & FLAG_DOUBLE_HEIGHT) {
+                *top *= 2;
+                *height *= 2;
+        }
+}
+
+int vc_sen_set_roi(struct vc_cam *cam)
+{
+        struct vc_ctrl *ctrl = &cam->ctrl;
+        struct vc_state *state = &cam->state;
+        struct i2c_client *client = ctrl->client_sen;
+        struct device *dev = &client->dev;
+        struct vc_binning *binning = vc_core_get_binning(cam);
+        int w_left, w_top, w_right, w_bottom, w_width, w_height, o_width, o_height;
+        int ret = 0;
+
+        vc_csr2 vc2OP_BLK_HWIDTH = (vc_csr2) { .l = 0x30d0, .m = 0x30d1 };
+        vc_csr2 vc2INFO_HWIDTH   = (vc_csr2) { .l = 0x30d2, .m = 0x30d3 };
+
+        __u16 rHVMODE   = 0x303c;
+        __u16 vc2EAV_SEL         = 0x3942;
+        __u16 rGMRWT    = 0x30e2;
+        __u16 rGMTWT    = 0x30e3;
+        __u16 rGSDLY    = 0x30e6;
+        __u16 rGAINDLY  = 0x30e5;
+
+
+        
+        if (NULL == binning) {
+                vc_err(dev, "%s() Could not get binning struct!\n", __FUNCTION__);
+                return -EINVAL;
+        }
+
+        vc_dbg(dev, "%s() h_factor: %d, v_factor: %d \n", __FUNCTION__,
+                binning->h_factor, binning->v_factor);
+
+        i2c_write_regs(client, binning->regs, __FUNCTION__);
+
+        vc_core_calculate_roi(cam, &w_left, &w_right, &w_width, &w_top, &w_bottom, &w_height);
+        o_width = state->frame.width;
+        o_height = state->frame.height;
+
+        vc_dbg(dev, "%s(): Set sensor roi: "
+                "(left-width-right: %u+%u=%u=>%u, top-height-bottom: %u+%u=%u=>%u)\n",
+                __FUNCTION__,
+                w_left, w_width, w_right, o_width,
+                w_top, w_height, w_bottom, o_height);
+
+        if (ctrl->flags & FLAG_PREGIUS_S) {
+
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.h_start, w_left, __FUNCTION__);
+                printk("bazo: w_left=%d \n", w_left);
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.v_start, w_top, __FUNCTION__);
+                printk("bazo: w_top=%d \n", w_top);
+
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.o_width, o_width, __FUNCTION__);
+                printk("bazo: o_width=%d \n", o_width);
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.o_height, o_height, __FUNCTION__);
+                printk("bazo: o_height=%d \n", o_height);
+
+
+//                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.h_end, w_right, __FUNCTION__);
+//                printk("bazo: w_right=%d \n", w_right);
+
+//                ret |= i2c_write_reg2(dev, client, &vc2OP_BLK_HWIDTH, 0x4d4, __FUNCTION__);
+//                ret |= i2c_write_reg2(dev, client, &vc2INFO_HWIDTH, 0x4d4, __FUNCTION__);
+
+//                ret |= i2c_write_reg2(dev, client, &vc2OP_BLK_HWIDTH, o_width, __FUNCTION__);
+//                ret |= i2c_write_reg2(dev, client, &vc2INFO_HWIDTH, o_width, __FUNCTION__);
+
+                ret |= i2c_write_reg(dev, client, rHVMODE, 0x10, __FUNCTION__);
+                ret |= i2c_write_reg2(dev, client, &vc2OP_BLK_HWIDTH, 0x810, __FUNCTION__);
+                ret |= i2c_write_reg2(dev, client, &vc2INFO_HWIDTH, 0x810, __FUNCTION__);
+                ret |= i2c_write_reg(dev, client, vc2EAV_SEL, 0x03, __FUNCTION__);
+
+                ret |= i2c_write_reg4(dev, client, &ctrl->csr.sen.hmax, 0x169, __FUNCTION__);    //imx565
+                ret |= i2c_write_reg(dev, client, rGMRWT, 0x08, __FUNCTION__);
+                ret |= i2c_write_reg(dev, client, rGMTWT, 0x28, __FUNCTION__);
+                ret |= i2c_write_reg(dev, client, rGSDLY, 0x14, __FUNCTION__);
+                ret |= i2c_write_reg(dev, client, rGAINDLY, 0x04, __FUNCTION__);
+
+
+/*
+                        ret |= vc_sen_write_hmax(ctrl, ctrl->expo_timing[index].hmax);
+                        ret |= i2c_write_reg(dev, client, rGMRWT, ctrl->expo_timing[index].spec.GMRWT, __FUNCTION__);
+                        ret |= i2c_write_reg(dev, client, rGMTWT, ctrl->expo_timing[index].spec.GMTWT, __FUNCTION__);
+                        ret |= i2c_write_reg(dev, client, rGSDLY, ctrl->expo_timing[index].spec.GSDLY, __FUNCTION__);
+                        ret |= i2c_write_reg(dev, client, rGAINDLY, ctrl->expo_timing[index].spec.GAINDLY, __FUNCTION__);
+*/
+
+//                        ret |= vc_sen_write_hmax(ctrl, 0xe8);
+/*
+                        ret |= i2c_write_reg4(dev, client, &ctrl->csr.sen.hmax, 0xe8, __FUNCTION__);  //imx568
+                        ret |= i2c_write_reg(dev, client, rGMRWT, 0x0c, __FUNCTION__);
+                        ret |= i2c_write_reg(dev, client, rGMTWT, 0x40, __FUNCTION__);
+                        ret |= i2c_write_reg(dev, client, rGSDLY, 0x1c, __FUNCTION__);
+                        ret |= i2c_write_reg(dev, client, rGAINDLY, 0x04, __FUNCTION__);
+*/
+
+
+        } else {
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.h_end, w_right, __FUNCTION__);
+                printk("bazo: w_right=%d \n", w_right);
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.v_end, w_bottom, __FUNCTION__);
+                printk("bazo: w_bottom=%d \n", w_bottom);
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.w_width, w_width, __FUNCTION__);
+                printk("bazo: w_width=%d \n", w_width);
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.w_height, w_height, __FUNCTION__);
+                printk("bazo: w_height=%d \n", w_height);
+
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.o_width, o_width, __FUNCTION__);
+                printk("bazo: o_width=%d \n", o_width);
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.o_height, o_height, __FUNCTION__);
+                printk("bazo: o_height=%d \n", o_height);
+
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.h_start, w_left, __FUNCTION__);
+                printk("bazo: w_left=%d \n", w_left);
+                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.v_start, w_top, __FUNCTION__);
+                printk("bazo: w_top=%d \n", w_top);
+        }
+
+
+//                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.o_width, o_width, __FUNCTION__);
+//                printk("bazo: o_width=%d \n", o_width);
+//                ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.o_height, o_height, __FUNCTION__);
+//                printk("bazo: o_height=%d \n", o_height);
+
+        if (ret) {
+                vc_err(dev, "%s(): Couldn't set sensor roi: "
+                        "(left-width-right: %u+%u=%u=>%u, top-height-bottom: %u+%u=%u=>%u)\n",
+                        __FUNCTION__,
+                        w_left, w_width, w_right, o_width,
+                        w_top, w_height, w_bottom, o_height);
+                return ret;
+        }
+
+        return ret;
+}
+
+#if 0
+int vc_sen_set_roi(struct vc_cam *cam)
+{
+        struct vc_ctrl *ctrl = &cam->ctrl;
+        struct vc_state *state = &cam->state;
+        struct i2c_client *client = ctrl->client_sen;
+        struct device *dev = &client->dev;
+        int w_left, w_top, w_width, w_height;
+        int ret = 0;
+
+        w_left = ctrl->frame.left + state->frame.left;
+        w_top = ctrl->frame.top + state->frame.top;
+        w_width = state->frame.width;
+        w_height = state->frame.height;
+
+        if (ctrl->flags & FLAG_DOUBLE_HEIGHT) {
+                w_top *= 2;
+                w_height *= 2;
+        }
+
+        vc_notice(dev, "%s(): Set sensor roi: (left: %u, top: %u, width: %u, height: %u)\n", __FUNCTION__,
+                w_left, w_top, w_width, w_height);
+
+        ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.h_start, w_left, __FUNCTION__);
+        ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.v_start, w_top, __FUNCTION__);
+        ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.o_width, w_width, __FUNCTION__);
+        ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.o_height, w_height, __FUNCTION__);
+        printk("bazo: trying to write h_end ... \n");
+        ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.h_end, w_width, __FUNCTION__);
+        printk("bazo: trying to write v_end ... \n");
+        ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.v_end, w_height, __FUNCTION__);
+        
+        
+        ret |= i2c_write_reg(dev, client, rHVMODE, 0x10, __FUNCTION__);
+        ret |= i2c_write_reg2(dev, client, &vc2BLK_HWIDTH, 0x810, __FUNCTION__);
+        ret |= i2c_write_reg2(dev, client, &vc2INFO_HWIDTH, 0x810, __FUNCTION__);
+
+        
+        if (ret) {
+                vc_err(dev, "%s(): Couldn't set sensor roi: (left: %u, top: %u, width: %u, height: %u) (error: %d)\n", __FUNCTION__,
+                        w_left, w_top, w_width, w_height, ret);
+                return ret;
+        }
+
+        return 0;
+}
+#endif
+
+
+#if 0
 int vc_sen_set_roi(struct vc_cam *cam)
 {
         struct vc_ctrl *ctrl = &cam->ctrl;
@@ -1321,8 +1677,7 @@ int vc_sen_set_roi(struct vc_cam *cam)
 
         return 0;
 }
-
-
+#endif
 
 #ifdef READ_VMAX
 static __u32 vc_sen_read_vmax(struct vc_ctrl *ctrl)
@@ -1412,7 +1767,6 @@ int vc_sen_set_gain(struct vc_cam *cam, int gain)
         return 0;
 }
 
-//int vc_sen_set_blacklevel(struct vc_cam *cam, int blacklevel)
 int vc_sen_set_blacklevel(struct vc_cam *cam, __u32 blacklevel_rel)
 {
         struct vc_ctrl *ctrl = &cam->ctrl;
@@ -1438,6 +1792,37 @@ int vc_sen_set_blacklevel(struct vc_cam *cam, __u32 blacklevel_rel)
         cam->state.blacklevel = blacklevel_rel;
         return 0;
 }
+
+int vc_sen_set_binning_mode(struct vc_cam *cam, int mode)
+{
+        struct vc_ctrl *ctrl = &cam->ctrl;
+        struct vc_state *state = &cam->state;
+        struct i2c_client *client = ctrl->client_sen;
+        struct device *dev = &client->dev;
+
+        vc_notice(dev, "%s(): Set binning mode: %u\n", __FUNCTION__, mode);
+
+        state->binning_mode = mode;
+
+        return 0;
+}
+
+#if 0
+int vc_sen_set_binning_mode(struct vc_cam *cam, __u32 binning_mode)
+{
+        struct vc_ctrl *ctrl = &cam->ctrl;
+        struct vc_state *state = &cam->state;
+        struct i2c_client *client = ctrl->client_sen;
+        struct device *dev = &client->dev;
+//        int ret = 0;
+        __u8 num_lanes = vc_core_get_num_lanes(cam);
+        __u8 format = vc_core_v4l2_code_to_format(state->format_code);
+
+        vc_notice(dev, "%s(): binning_mode=%d format=0x%02x, lanes=%d \n", __FUNCTION__, binning_mode, format, num_lanes);
+
+        return 0;
+}
+#endif
 
 int vc_sen_start_stream(struct vc_cam *cam)
 {

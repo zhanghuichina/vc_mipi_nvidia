@@ -1,7 +1,7 @@
 #ifndef _VC_MIPI_CORE_H
 #define _VC_MIPI_CORE_H
 
-// #define DEBUG
+ #define DEBUG
 
 #include <linux/types.h>
 #include <linux/i2c.h>
@@ -119,6 +119,7 @@ typedef struct vc_csr4 {
         __u32 u;
 } vc_csr4;
 
+/*
 struct vc_sen_csr {
         struct vc_csr2 mode;
         __u8 mode_standby;
@@ -137,10 +138,37 @@ struct vc_sen_csr {
         struct vc_csr4 flash_duration;
         struct vc_csr4 flash_offset;
 };
+*/
+
+struct vc_sen_csr {
+        struct vc_csr2 mode;
+        __u8 mode_standby;
+        __u8 mode_operating;
+        struct vc_csr4 vmax;
+        struct vc_csr4 hmax;
+        struct vc_csr4 shs;
+        struct vc_csr2 gain;
+        struct vc_csr2 blacklevel;
+        struct vc_csr2 h_start;
+        struct vc_csr2 v_start;
+        struct vc_csr2 h_end;
+        struct vc_csr2 v_end;
+        struct vc_csr2 w_width;
+        struct vc_csr2 w_height;
+        struct vc_csr2 o_width;
+        struct vc_csr2 o_height;
+        struct vc_csr4 flash_duration;
+        struct vc_csr4 flash_offset;
+};
 
 struct vc_csr {
         struct vc_sen_csr sen;
 };
+
+typedef struct vc_reg {
+        __u16 address;
+        __u8 value;
+} vc_reg;
 
 typedef struct vc_mode {
         __u8       num_lanes;
@@ -149,7 +177,20 @@ typedef struct vc_mode {
         vc_control vmax;
         vc_control blacklevel;
         __u32      retrigger_min;
+        struct vc_reg regs[8];
 } vc_mode;
+
+typedef struct vc_binning {
+        __u8 h_factor;
+        __u8 v_factor;
+        struct vc_reg regs[8];
+} vc_binning;
+
+#define BINNING_START(binning, h, v) \
+        binning = (vc_binning) { .h_factor = h, .v_factor = v }; \
+        { const struct vc_reg regs [] = {
+#define BINNING_END(binning) \
+        , {0, 0} }; memcpy(&binning.regs, regs, sizeof(regs)); }
 
 struct vc_ctrl {
         // Communication
@@ -163,6 +204,7 @@ struct vc_ctrl {
         struct vc_control framerate;
         // Modes & Frame Formats
         struct vc_frame frame;          // Pixel
+        struct vc_binning binnings[8];
         // Control and status registers
         struct vc_csr csr;
         // Exposure
@@ -190,6 +232,7 @@ struct vc_state {
         __u8 num_lanes;
         __u8 io_mode;
         __u8 trigger_mode;
+        __u8 binning_mode;
         int power_on;
         int streaming;
         __u8 flags;
@@ -212,7 +255,10 @@ struct device *vc_core_get_mod_device(struct vc_cam *cam);
 int vc_core_try_format(struct vc_cam *cam, __u32 code);
 int vc_core_set_format(struct vc_cam *cam, __u32 code);
 __u32 vc_core_get_format(struct vc_cam *cam);
-int vc_core_set_frame(struct vc_cam *cam, __u32 x, __u32 y, __u32 width, __u32 height);
+//int vc_core_set_frame(struct vc_cam *cam, __u32 x, __u32 y, __u32 width, __u32 height);
+int vc_core_set_frame(struct vc_cam *cam, __u32 left, __u32 top, __u32 width, __u32 height);
+int vc_core_set_frame_size(struct vc_cam *cam, __u32 width, __u32 height);
+int vc_core_set_frame_position(struct vc_cam *cam, __u32 left, __u32 top);
 struct vc_frame *vc_core_get_frame(struct vc_cam *cam);
 int vc_core_set_num_lanes(struct vc_cam *cam, __u32 number);
 __u32 vc_core_get_num_lanes(struct vc_cam *cam);
@@ -241,9 +287,15 @@ int vc_sen_set_roi(struct vc_cam *cam);
 int vc_sen_set_exposure(struct vc_cam *cam, int exposure);
 int vc_sen_set_gain(struct vc_cam *cam, int gain);
 
-//int vc_sen_set_blacklevel(struct vc_cam *cam, int blacklevel);
 int vc_sen_set_blacklevel(struct vc_cam *cam, __u32 blacklevel);
+//int vc_sen_set_binning_mode(struct vc_cam *cam, __u32 binning_mode);
+int vc_sen_set_binning_mode(struct vc_cam *cam, int mode);
 int vc_sen_start_stream(struct vc_cam *cam);
 int vc_sen_stop_stream(struct vc_cam *cam);
+
+
+
+//int vc_sen_set_binning565(struct vc_cam *cam);
+
 
 #endif // _VC_MIPI_CORE_H

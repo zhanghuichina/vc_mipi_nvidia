@@ -446,6 +446,15 @@ static void vc_init_ctrl_imx392(struct vc_ctrl *ctrl, struct vc_desc* desc)
 //  TODO: 
 //  - No black level (0x0B04 <= 1 - Black level correction enable)
 
+#define IMX412_BINNING_MODE            0x0900
+#define IMX412_BINNING_MODE_DISABLE    0x00
+#define IMX412_BINNING_MODE_ENABLE     0x01
+#define IMX412_BINNING_TYPE            0x0901
+#define IMX412_BINNING_WEIGHTING       0x0902
+#define IMX412_BINNING_WEIGHTING_AVG   0x00
+#define IMX412_BINNING_TYPE_EXT_EN     0x3f42
+#define IMX412_BINNING_TYPE_H_EXT      0x3f43
+
 static void vc_init_ctrl_imx412(struct vc_ctrl *ctrl, struct vc_desc* desc)
 {
         INIT_MESSAGE("IMX412")
@@ -464,6 +473,42 @@ static void vc_init_ctrl_imx412(struct vc_ctrl *ctrl, struct vc_desc* desc)
 
         ctrl->clk_ext_trigger           = 27000000;
         ctrl->clk_pixel                 = 27000000;
+
+        BINNING_START(ctrl->binnings[0], 0, 0)
+                { IMX412_BINNING_MODE, IMX412_BINNING_MODE_DISABLE },
+                { IMX412_BINNING_TYPE, 0x11 }
+        BINNING_END(ctrl->binnings[0])
+        BINNING_START(ctrl->binnings[1], 1, 2)
+                { IMX412_BINNING_MODE, IMX412_BINNING_MODE_ENABLE },
+                { IMX412_BINNING_WEIGHTING, IMX412_BINNING_WEIGHTING_AVG },
+                { IMX412_BINNING_TYPE, 0x12 }
+        BINNING_END(ctrl->binnings[1])
+        BINNING_START(ctrl->binnings[2], 2, 2)
+                { IMX412_BINNING_MODE, IMX412_BINNING_MODE_ENABLE },
+                { IMX412_BINNING_WEIGHTING, IMX412_BINNING_WEIGHTING_AVG },
+                { IMX412_BINNING_TYPE, 0x22 }
+        BINNING_END(ctrl->binnings[2])
+        BINNING_START(ctrl->binnings[3], 4, 2)
+                { IMX412_BINNING_MODE, IMX412_BINNING_MODE_ENABLE },
+                { IMX412_BINNING_WEIGHTING, IMX412_BINNING_WEIGHTING_AVG },
+                { IMX412_BINNING_TYPE, 0x42 }
+        BINNING_END(ctrl->binnings[3])
+        BINNING_START(ctrl->binnings[4], 8, 2)
+                { IMX412_BINNING_MODE, IMX412_BINNING_MODE_ENABLE },
+                { IMX412_BINNING_WEIGHTING, IMX412_BINNING_WEIGHTING_AVG },
+                { IMX412_BINNING_TYPE, 0x82 }
+        BINNING_END(ctrl->binnings[4])
+
+        BINNING_START(ctrl->binnings[5], 16, 2)
+                { IMX412_BINNING_MODE, IMX412_BINNING_MODE_ENABLE },
+                { IMX412_BINNING_WEIGHTING, IMX412_BINNING_WEIGHTING_AVG },
+                { IMX412_BINNING_TYPE, 0x02 },
+                { IMX412_BINNING_TYPE_EXT_EN, 0x01 },
+                { IMX412_BINNING_TYPE_H_EXT, 0x01 }
+        BINNING_END(ctrl->binnings[5])
+
+
+//        bazo: binning table ins readme
 
         ctrl->flags                     = FLAG_RESET_ALWAYS;
         ctrl->flags                    |= FLAG_EXPOSURE_NORMAL;
@@ -520,6 +565,18 @@ static void vc_init_ctrl_imx462(struct vc_ctrl *ctrl, struct vc_desc *desc)
         MODE(1, 4, FORMAT_RAW10,  550,    1, 0x3ffff, 0x465,  511,   60,         0)
 }
 
+
+#define IMX56X_HV_MODE                 0x30c3
+#define IMX56X_BINNING_MODE_DISABLE    0x00
+#define IMX56X_BINNING_MODE_ENABLE     0x10
+#define IMX56X_VBLK_HWIDTH_UPPER       0x30d1
+#define IMX56X_VBLK_HWIDTH_LOWER       0x30d0
+#define IMX56X_FINFO_HWIDTH_UPPER      0x30d3
+#define IMX56X_FINFO_HWIDTH_LOWER      0x30d2
+#define IMX56X_EAV_SELECT              0x3942
+#define IMX56X_EAV_SELECT_VALUE        0x03
+
+
 // ------------------------------------------------------------------------------------------------
 //  Settings for IMX565 (Rev.03)
 //  12.4 MegaPixel Pregius S
@@ -541,7 +598,8 @@ static void vc_init_ctrl_imx565(struct vc_ctrl *ctrl, struct vc_desc *desc)
         FRAME(0, 0, 4128, 3000)
         //                       hmax  vmax      vmax   vmax  blkl  blkl  retrigger
         //                              min       max    def   max   def
-        MODE(0, 2, FORMAT_RAW08, 1070,   18, 0xffffff, 0xc2c,  255,   15,   2410776)
+        //all read out
+        MODE(0, 2, FORMAT_RAW08, 1070,   18, 0xffffff, 0xc2c,  255,   15,   2410776, COMMON_START {...} COMMON_END)
         MODE(1, 2, FORMAT_RAW10, 1328,   16, 0xffffff, 0xc2a, 1023,   60,   2990142)
         MODE(2, 2, FORMAT_RAW12, 1586,   14, 0xffffff, 0xc26, 4095,  240,   3568752)
         MODE(3, 4, FORMAT_RAW08,  555,   30, 0xffffff, 0xc40,  255,   15,   1256094)
@@ -552,6 +610,35 @@ static void vc_init_ctrl_imx565(struct vc_ctrl *ctrl, struct vc_desc *desc)
         // ---------------------------------------------------------------
         MODE(4, 4, FORMAT_RAW10,  684,   26, 0xffffff, 0xc3a, 1023,   60,   1546074)
         MODE(5, 4, FORMAT_RAW12,  812,   22, 0xffffff, 0xc34, 4095,  240,   1833030)
+
+        //binning
+        MODE(0, 2, FORMAT_RAW08, 1070,   18, 0xffffff, 0xc2c,  255,   15,   2410776, COMMON_START {...} COMMON_END)
+        MODE(1, 2, FORMAT_RAW10, 1328,   16, 0xffffff, 0xc2a, 1023,   60,   2990142)
+        MODE(2, 2, FORMAT_RAW12, 1586,   14, 0xffffff, 0xc26, 4095,  240,   3568752)
+        MODE(3, 4, FORMAT_RAW08,  555,   30, 0xffffff, 0xc40,  255,   15,   1256094)
+        // ---------------------------------------------------------------
+        // Workaround for Rev.01. .hmax = 1197. 
+        // This limits the fps to 18.8 fps!
+        // The theoretically correct value for Rev.02 is .hmax = 684
+        // ---------------------------------------------------------------
+        MODE(4, 4, FORMAT_RAW10,  684,   26, 0xffffff, 0xc3a, 1023,   60,   1546074)
+        MODE(5, 4, FORMAT_RAW12,  812,   22, 0xffffff, 0xc34, 4095,  240,   1833030)
+
+        BINNING_START(ctrl->binnings[0], 0, 0)
+                { IMX56X_HV_MODE, IMX56X_BINNING_MODE_DISABLE },
+                { IMX56X_EAV_SELECT, IMX56X_EAV_SELECT_VALUE }
+        BINNING_END(ctrl->binnings[0])
+
+// additional register set for arbitrary configuration...
+
+        BINNING_START(ctrl->binnings[1], 2, 2)
+                { IMX56X_HV_MODE, IMX56X_BINNING_MODE_ENABLE },
+             { IMX56X_EAV_SELECT, IMX56X_EAV_SELECT_VALUE }
+//                { IMX412_BINNING_WEIGHTING, IMX412_BINNING_WEIGHTING_AVG },
+//                { IMX412_BINNING_TYPE, 0x12 }
+        BINNING_END(ctrl->binnings[1])
+
+
 
         ctrl->flags                     = FLAG_EXPOSURE_SONY;
         ctrl->flags                    |= FLAG_PREGIUS_S;
@@ -635,6 +722,7 @@ static void vc_init_ctrl_imx567(struct vc_ctrl *ctrl, struct vc_desc* desc)
 //  Settings for IMX568 (Rev.04)
 //  5.1 MegaPixel Pregius S
 
+
 static void vc_init_ctrl_imx568(struct vc_ctrl *ctrl, struct vc_desc* desc)
 {
         INIT_MESSAGE("IMX568")
@@ -650,12 +738,34 @@ static void vc_init_ctrl_imx568(struct vc_ctrl *ctrl, struct vc_desc* desc)
         FRAME(0, 0, 2464, 2064)
         //                       hmax  vmax      vmax   vmax  blkl  blkl  retrigger
         //                              min       max    def   max   def
+/*
         MODE(0, 2, FORMAT_RAW08,  656,   26, 0xffffff, 0x88a,  255,   15,   1058562)
         MODE(1, 2, FORMAT_RAW10,  810,   22, 0xffffff, 0x884, 1023,   60,   1273590)
         MODE(2, 2, FORMAT_RAW12,  965,   20, 0xffffff, 0x880, 4095,  240,   1514484)
         MODE(3, 4, FORMAT_RAW08,  348,   46, 0xffffff, 0x8a8,  255,   15,    553716)
         MODE(4, 4, FORMAT_RAW10,  425,   38, 0xffffff, 0x89e, 1023,   60,    673812)
         MODE(5, 4, FORMAT_RAW12,  502,   34, 0xffffff, 0x896, 4095,  240,    793692)
+*/
+
+        MODE(0, 2, FORMAT_RAW08,  656,   26, 0xffffff, 0x88a,  255,   15,   1058562)
+        MODE(1, 2, FORMAT_RAW10,  810,   22, 0xffffff, 0x884, 1023,   60,   1273590)
+        MODE(2, 2, FORMAT_RAW12,  965,   20, 0xffffff, 0x880, 4095,  240,   1514484)
+        MODE(3, 4, FORMAT_RAW08,  348,   46, 0xffffff, 0x8a8,  255,   15,    553716)
+
+        MODE(4, 4, FORMAT_RAW10,  232,   44, 0xffffff, 0x4a8, 1023,   60,    673812)
+        
+        MODE(5, 4, FORMAT_RAW12,  502,   34, 0xffffff, 0x896, 4095,  240,    793692)
+
+        BINNING_START(ctrl->binnings[0], 0, 0)
+                { IMX56X_HV_MODE, IMX56X_BINNING_MODE_DISABLE },
+                { IMX56X_EAV_SELECT, IMX56X_EAV_SELECT_VALUE }
+        BINNING_END(ctrl->binnings[0])
+        BINNING_START(ctrl->binnings[1], 2, 2)
+                { IMX56X_HV_MODE, IMX56X_BINNING_MODE_ENABLE },
+                { IMX56X_EAV_SELECT, 0x00 }
+//                { IMX412_BINNING_WEIGHTING, IMX412_BINNING_WEIGHTING_AVG },
+//                { IMX412_BINNING_TYPE, 0x12 }
+        BINNING_END(ctrl->binnings[1])
 
         ctrl->flags                     = FLAG_EXPOSURE_SONY;
         ctrl->flags                    |= FLAG_PREGIUS_S;
