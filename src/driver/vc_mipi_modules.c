@@ -8,7 +8,6 @@
 
 #define FRAME(_left, _top, _width, _height) \
         ctrl->frame = (vc_frame) { .left = _left, .top = _top, .width = _width, .height = _height };
-
 #define MODE(index, lanes, format, _hmax, vmax_min, vmax_max, vmax_def, \
         blacklevel_max, blacklevel_def, _retrigger_min) \
         ctrl->mode[index] = (vc_mode) { lanes, format, \
@@ -17,6 +16,25 @@
                 .blacklevel = {.min = 0, .max = blacklevel_max,  .def = blacklevel_def }, \
                 .retrigger_min = _retrigger_min };
 
+#define MODE_Z(index, lanes, format, binning, _hmax, vmax_min, vmax_max, vmax_def, \
+        blacklevel_max, blacklevel_def, _retrigger_min) \
+        ctrl->mode[index] = (vc_mode) { lanes, format, binning, \
+                .hmax = _hmax,  \
+                .vmax = {.min = vmax_min, .max = vmax_max, .def = vmax_def}, \
+                .blacklevel = {.min = 0, .max = blacklevel_max,  .def = blacklevel_def }, \
+                .retrigger_min = _retrigger_min };
+
+#define BINNING_MODE_REGS(_mode, ...) \
+        if (MAX_VC_MODES > _mode) { \
+                do { \
+                        const struct vc_reg _binning_mode_regs [] = { __VA_ARGS__ }; \
+                        int vrs = 0; \
+                        vrs = sizeof(_binning_mode_regs) / sizeof(vc_reg); \
+                                if (MAX_BINNING_MODE_REGS > vrs) { \
+                                        memcpy(&ctrl->mode[_mode].binning_mode_regs, _binning_mode_regs, sizeof(_binning_mode_regs)); \
+                                } \
+                } while (0); \
+        }
 
 int vc_mod_is_color_sensor(struct vc_desc *desc)
 {
@@ -468,8 +486,8 @@ static void vc_init_ctrl_imx412(struct vc_ctrl *ctrl, struct vc_desc* desc)
         FRAME(0, 0, 4032, 3040)
         //                       hmax  vmax     vmax    vmax  blkl  blkl  retrigger
         //                              min      max     def   max   def
-        MODE(0, 2, FORMAT_RAW10,  436,   10,  0xffff, 0x0c14, 1023,   40,         0)
-        MODE(1, 4, FORMAT_RAW10,  218,   10,  0xffff, 0x0c14, 1023,   40,         0)
+        MODE_Z(0, 2, FORMAT_RAW10, 0,  436,   10,  0xffff, 0x0c14, 1023,   40,         0)
+        MODE_Z(1, 4, FORMAT_RAW10, 0,  218,   10,  0xffff, 0x0c14, 1023,   40,         0)
 
         ctrl->clk_ext_trigger           = 27000000;
         ctrl->clk_pixel                 = 27000000;
@@ -507,8 +525,7 @@ static void vc_init_ctrl_imx412(struct vc_ctrl *ctrl, struct vc_desc* desc)
                 { IMX412_BINNING_TYPE_H_EXT, 0x01 }
         BINNING_END(ctrl->binnings[5])
 
-
-//        bazo: binning table ins readme
+        ctrl->max_binning_modes_used = 5;
 
         ctrl->flags                     = FLAG_RESET_ALWAYS;
         ctrl->flags                    |= FLAG_EXPOSURE_NORMAL;
@@ -565,17 +582,20 @@ static void vc_init_ctrl_imx462(struct vc_ctrl *ctrl, struct vc_desc *desc)
         MODE(1, 4, FORMAT_RAW10,  550,    1, 0x3ffff, 0x465,  511,   60,         0)
 }
 
+#define IMX56X_HV_MODE                  0x303c
+#define IMX56X_BINNING_MODE_DISABLE     0x00
+#define IMX56X_BINNING_MODE_ENABLE      0x10
+#define IMX56X_VBLK_HWIDTH_UPPER        0x30d1
+#define IMX56X_VBLK_HWIDTH_LOWER        0x30d0
+#define IMX56X_FINFO_HWIDTH_UPPER       0x30d3
+#define IMX56X_FINFO_HWIDTH_LOWER       0x30d2
+#define IMX56X_EAV_SELECT               0x3942
+#define IMX56X_EAV_SELECT_VALUE         0x03
 
-#define IMX56X_HV_MODE                 0x30c3
-#define IMX56X_BINNING_MODE_DISABLE    0x00
-#define IMX56X_BINNING_MODE_ENABLE     0x10
-#define IMX56X_VBLK_HWIDTH_UPPER       0x30d1
-#define IMX56X_VBLK_HWIDTH_LOWER       0x30d0
-#define IMX56X_FINFO_HWIDTH_UPPER      0x30d3
-#define IMX56X_FINFO_HWIDTH_LOWER      0x30d2
-#define IMX56X_EAV_SELECT              0x3942
-#define IMX56X_EAV_SELECT_VALUE        0x03
-
+#define IMX56X_GMRWT                    0x30e2
+#define IMX56X_GMTWT                    0x30e3
+#define IMX56X_GAINDLY                  0x30e5
+#define IMX56X_GSDLY                    0x30e6
 
 // ------------------------------------------------------------------------------------------------
 //  Settings for IMX565 (Rev.03)
@@ -596,49 +616,43 @@ static void vc_init_ctrl_imx565(struct vc_ctrl *ctrl, struct vc_desc *desc)
         ctrl->csr.sen.mode_operating    = 0x00;
 
         FRAME(0, 0, 4128, 3000)
-        //                       hmax  vmax      vmax   vmax  blkl  blkl  retrigger
-        //                              min       max    def   max   def
-        //all read out
-        MODE(0, 2, FORMAT_RAW08, 1070,   18, 0xffffff, 0xc2c,  255,   15,   2410776, COMMON_START {...} COMMON_END)
-        MODE(1, 2, FORMAT_RAW10, 1328,   16, 0xffffff, 0xc2a, 1023,   60,   2990142)
-        MODE(2, 2, FORMAT_RAW12, 1586,   14, 0xffffff, 0xc26, 4095,  240,   3568752)
-        MODE(3, 4, FORMAT_RAW08,  555,   30, 0xffffff, 0xc40,  255,   15,   1256094)
-        // ---------------------------------------------------------------
-        // Workaround for Rev.01. .hmax = 1197. 
-        // This limits the fps to 18.8 fps!
-        // The theoretically correct value for Rev.02 is .hmax = 684
-        // ---------------------------------------------------------------
-        MODE(4, 4, FORMAT_RAW10,  684,   26, 0xffffff, 0xc3a, 1023,   60,   1546074)
-        MODE(5, 4, FORMAT_RAW12,  812,   22, 0xffffff, 0xc34, 4095,  240,   1833030)
+
+        //all read out           binning  hmax  vmax      vmax   vmax  blkl  blkl  retrigger
+        //                        mode           min       max    def   max   def
+        MODE_Z( 0, 2, FORMAT_RAW08, 0,    1070,   18, 0xffffff, 0xc2c,  255,   15,   2410776)
+        MODE_Z( 1, 2, FORMAT_RAW10, 0,    1328,   16, 0xffffff, 0xc2a, 1023,   60,   2990142)
+        MODE_Z( 2, 2, FORMAT_RAW12, 0,    1586,   14, 0xffffff, 0xc26, 4095,  240,   3568752)
+        MODE_Z( 3, 4, FORMAT_RAW08, 0,     555,   30, 0xffffff, 0xc40,  255,   15,   1256094)
+        MODE_Z( 4, 4, FORMAT_RAW10, 0,     684,   26, 0xffffff, 0xc3a, 1023,   60,   1546074)
+        MODE_Z( 5, 4, FORMAT_RAW12, 0,     812,   22, 0xffffff, 0xc34, 4095,  240,   1833030)
 
         //binning
-        MODE(0, 2, FORMAT_RAW08, 1070,   18, 0xffffff, 0xc2c,  255,   15,   2410776, COMMON_START {...} COMMON_END)
-        MODE(1, 2, FORMAT_RAW10, 1328,   16, 0xffffff, 0xc2a, 1023,   60,   2990142)
-        MODE(2, 2, FORMAT_RAW12, 1586,   14, 0xffffff, 0xc26, 4095,  240,   3568752)
-        MODE(3, 4, FORMAT_RAW08,  555,   30, 0xffffff, 0xc40,  255,   15,   1256094)
-        // ---------------------------------------------------------------
-        // Workaround for Rev.01. .hmax = 1197. 
-        // This limits the fps to 18.8 fps!
-        // The theoretically correct value for Rev.02 is .hmax = 684
-        // ---------------------------------------------------------------
-        MODE(4, 4, FORMAT_RAW10,  684,   26, 0xffffff, 0xc3a, 1023,   60,   1546074)
-        MODE(5, 4, FORMAT_RAW12,  812,   22, 0xffffff, 0xc34, 4095,  240,   1833030)
+        MODE_Z( 6, 2, FORMAT_RAW08, 1,     554,  32, 0xffffff, 0x644,  255,   15,    638982)
+        MODE_Z( 7, 2, FORMAT_RAW10, 1,     683,  28, 0xffffff, 0x640, 1023,   60,    785808)
+        MODE_Z( 8, 2, FORMAT_RAW12, 1,     812,  24, 0xffffff, 0x638, 4095,  240,    931878)
+        MODE_Z( 9, 4, FORMAT_RAW08, 1,     297,  52, 0xffffff, 0x668,  255,   15,    347760)
+        MODE_Z(10, 4, FORMAT_RAW10, 1,     361,  44, 0xffffff, 0x65c, 1023,   60,    420552)
+        MODE_Z(11, 4, FORMAT_RAW12, 1,     425,  40, 0xffffff, 0x654, 4095,  240,    493884)
+        
+        // special registers for binning mode
+        BINNING_MODE_REGS(  6, { IMX56X_GMRWT, 0x04 }, { IMX56X_GMTWT, 0x1c }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x0c } );
+        BINNING_MODE_REGS(  7, { IMX56X_GMRWT, 0x04 }, { IMX56X_GMTWT, 0x18 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x0c } );
+        BINNING_MODE_REGS(  8, { IMX56X_GMRWT, 0x04 }, { IMX56X_GMTWT, 0x14 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x08 } );
+        BINNING_MODE_REGS(  9, { IMX56X_GMRWT, 0x08 }, { IMX56X_GMTWT, 0x30 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x18 } );
+        BINNING_MODE_REGS( 10, { IMX56X_GMRWT, 0x08 }, { IMX56X_GMTWT, 0x28 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x14 } );
+        BINNING_MODE_REGS( 11, { IMX56X_GMRWT, 0x08 }, { IMX56X_GMTWT, 0x24 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x10 } );
 
         BINNING_START(ctrl->binnings[0], 0, 0)
                 { IMX56X_HV_MODE, IMX56X_BINNING_MODE_DISABLE },
                 { IMX56X_EAV_SELECT, IMX56X_EAV_SELECT_VALUE }
         BINNING_END(ctrl->binnings[0])
 
-// additional register set for arbitrary configuration...
-
         BINNING_START(ctrl->binnings[1], 2, 2)
                 { IMX56X_HV_MODE, IMX56X_BINNING_MODE_ENABLE },
-             { IMX56X_EAV_SELECT, IMX56X_EAV_SELECT_VALUE }
-//                { IMX412_BINNING_WEIGHTING, IMX412_BINNING_WEIGHTING_AVG },
-//                { IMX412_BINNING_TYPE, 0x12 }
+                { IMX56X_EAV_SELECT, IMX56X_EAV_SELECT_VALUE }
         BINNING_END(ctrl->binnings[1])
 
-
+        ctrl->max_binning_modes_used = 1;
 
         ctrl->flags                     = FLAG_EXPOSURE_SONY;
         ctrl->flags                    |= FLAG_PREGIUS_S;
@@ -648,6 +662,7 @@ static void vc_init_ctrl_imx565(struct vc_ctrl *ctrl, struct vc_desc *desc)
         ctrl->flags                    |= FLAG_TRIGGER_PULSEWIDTH;
         ctrl->flags                    |= FLAG_TRIGGER_SELF;
         ctrl->flags                    |= FLAG_TRIGGER_SINGLE;
+        ctrl->flags                    |= FLAG_USE_BINNING_INDEX;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -662,19 +677,49 @@ static void vc_init_ctrl_imx566(struct vc_ctrl *ctrl, struct vc_desc* desc)
 
         ctrl->csr.sen.blacklevel        = (vc_csr2) { .l = 0x35b4, .m = 0x35b5 };
         ctrl->csr.sen.vmax              = (vc_csr4) { .l = 0x30d4, .m = 0x30d5, .h = 0x30d6, .u = 0x0000 };
+        ctrl->csr.sen.hmax              = (vc_csr4) { .l = 0x30d8, .m = 0x30d9, .h = 0x0000, .u = 0x0000 };
         ctrl->csr.sen.mode              = (vc_csr2) { .l = 0x3000, .m = 0x3010 };
         ctrl->csr.sen.mode_standby      = 0x01;
         ctrl->csr.sen.mode_operating    = 0x00;
 
         FRAME(0, 0, 2848, 2848)
-        //                       hmax  vmax      vmax   vmax  blkl  blkl  retrigger
-        //                              min       max    def   max   def
-        MODE(0, 2, FORMAT_RAW08,  752,   24, 0xffffff, 0xb98,  255,   15,   1612278)
-        MODE(1, 2, FORMAT_RAW10,  930,   20, 0xffffff, 0xb92, 1023,   60,   1991196)
-        MODE(2, 2, FORMAT_RAW12, 1109,   18, 0xffffff, 0xb8c, 4095,  240,   2371194)
-        MODE(3, 4, FORMAT_RAW08,  396,   40, 0xffffff, 0xbb0,  255,   15,    854172)
-        MODE(4, 4, FORMAT_RAW10,  485,   34, 0xffffff, 0xba6, 1023,   60,   1043334)
-        MODE(5, 4, FORMAT_RAW12,  574,   30, 0xffffff, 0xba0, 4095,  240,   1233144)
+
+        //all read out           binning  hmax  vmax      vmax   vmax  blkl  blkl  retrigger
+        //                        mode           min       max    def   max   def
+        MODE_Z( 0, 2, FORMAT_RAW08, 0,     752,   24, 0xffffff, 0xb98,  255,   15,   1612278)
+        MODE_Z( 1, 2, FORMAT_RAW10, 0,     930,   20, 0xffffff, 0xb92, 1023,   60,   1991196)
+        MODE_Z( 2, 2, FORMAT_RAW12, 0,    1109,   18, 0xffffff, 0xb8c, 4095,  240,   2371194)
+        MODE_Z( 3, 4, FORMAT_RAW08, 0,     396,   40, 0xffffff, 0xbb0,  255,   15,    854172)
+        MODE_Z( 4, 4, FORMAT_RAW10, 0,     485,   34, 0xffffff, 0xba6, 1023,   60,   1043334)
+        MODE_Z( 5, 4, FORMAT_RAW12, 0,     574,   30, 0xffffff, 0xba0, 4095,  240,   1233144)
+
+        //binning
+        MODE_Z( 6, 2, FORMAT_RAW08, 1,     396,   40, 0xffffff, 0x604,  255,   15,    430812)
+        MODE_Z( 7, 2, FORMAT_RAW10, 1,     485,   36, 0xffffff, 0x5fc, 1023,   60,    524826)
+        MODE_Z( 8, 2, FORMAT_RAW12, 1,     575,   32, 0xffffff, 0x5f4, 4095,  240,    620568)
+        MODE_Z( 9, 4, FORMAT_RAW08, 1,     218,   72, 0xffffff, 0x634,  255,   15,    242892)
+        MODE_Z(10, 4, FORMAT_RAW10, 1,     262,   60, 0xffffff, 0x620, 1023,   60,    288846)
+        MODE_Z(11, 4, FORMAT_RAW12, 1,     307,   52, 0xffffff, 0x614, 4095,  240,    336690)
+
+        // special registers for binning mode
+        BINNING_MODE_REGS(  6, { IMX56X_GMRWT, 0x08 }, { IMX56X_GMTWT, 0x24 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x10 } );
+        BINNING_MODE_REGS(  7, { IMX56X_GMRWT, 0x04 }, { IMX56X_GMTWT, 0x20 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x10 } );
+        BINNING_MODE_REGS(  8, { IMX56X_GMRWT, 0x04 }, { IMX56X_GMTWT, 0x1c }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x0c } );
+        BINNING_MODE_REGS(  9, { IMX56X_GMRWT, 0x0c }, { IMX56X_GMTWT, 0x44 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x1c } );
+        BINNING_MODE_REGS( 10, { IMX56X_GMRWT, 0x08 }, { IMX56X_GMTWT, 0x38 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x18 } );
+        BINNING_MODE_REGS( 11, { IMX56X_GMRWT, 0x08 }, { IMX56X_GMTWT, 0x30 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x14 } );
+
+        BINNING_START(ctrl->binnings[0], 0, 0)
+                { IMX56X_HV_MODE, IMX56X_BINNING_MODE_DISABLE },
+                { IMX56X_EAV_SELECT, IMX56X_EAV_SELECT_VALUE }
+        BINNING_END(ctrl->binnings[0])
+
+        BINNING_START(ctrl->binnings[1], 2, 2)
+                { IMX56X_HV_MODE, IMX56X_BINNING_MODE_ENABLE },
+                { IMX56X_EAV_SELECT, IMX56X_EAV_SELECT_VALUE }
+        BINNING_END(ctrl->binnings[1])
+
+        ctrl->max_binning_modes_used = 1;
 
         ctrl->flags                     = FLAG_EXPOSURE_SONY;
         ctrl->flags                    |= FLAG_PREGIUS_S;
@@ -682,6 +727,7 @@ static void vc_init_ctrl_imx566(struct vc_ctrl *ctrl, struct vc_desc* desc)
         ctrl->flags                    |= FLAG_IO_ENABLED;
         ctrl->flags                    |= FLAG_TRIGGER_EXTERNAL | FLAG_TRIGGER_PULSEWIDTH |
                                           FLAG_TRIGGER_SELF | FLAG_TRIGGER_SINGLE;
+        ctrl->flags                    |= FLAG_USE_BINNING_INDEX;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -696,19 +742,49 @@ static void vc_init_ctrl_imx567(struct vc_ctrl *ctrl, struct vc_desc* desc)
 
         ctrl->csr.sen.blacklevel        = (vc_csr2) { .l = 0x35b4, .m = 0x35b5 };
         ctrl->csr.sen.vmax              = (vc_csr4) { .l = 0x30d4, .m = 0x30d5, .h = 0x30d6, .u = 0x0000 };
+        ctrl->csr.sen.hmax              = (vc_csr4) { .l = 0x30d8, .m = 0x30d9, .h = 0x0000, .u = 0x0000 };
         ctrl->csr.sen.mode              = (vc_csr2) { .l = 0x3000, .m = 0x3010 };
         ctrl->csr.sen.mode_standby      = 0x01;
         ctrl->csr.sen.mode_operating    = 0x00;
 
         FRAME(0, 0, 2464, 2064)
-        //                       hmax  vmax      vmax   vmax  blkl  blkl  retrigger
-        //                              min       max    def   max   def
-        MODE(0, 2, FORMAT_RAW08,  656,   26, 0xffffff, 0x88a,  255,   15,   1058562)
-        MODE(1, 2, FORMAT_RAW10,  810,   22, 0xffffff, 0x884, 1023,   60,   1273590)
-        MODE(2, 2, FORMAT_RAW12,  965,   20, 0xffffff, 0x880, 4095,  240,   1514484)
-        MODE(3, 4, FORMAT_RAW08,  348,   46, 0xffffff, 0x8a8,  255,   15,    553716)
-        MODE(4, 4, FORMAT_RAW10,  425,   38, 0xffffff, 0x89e, 1023,   60,    673812)
-        MODE(5, 4, FORMAT_RAW12,  502,   34, 0xffffff, 0x896, 4095,  240,    793692)
+
+        //all read out           binning  hmax  vmax      vmax   vmax  blkl  blkl  retrigger
+        //                        mode           min       max    def   max   def
+        MODE_Z( 0, 2, FORMAT_RAW08, 0,     656,   26, 0xffffff, 0x88a,  255,   15,   1058562)
+        MODE_Z( 1, 2, FORMAT_RAW10, 0,     810,   22, 0xffffff, 0x884, 1023,   60,   1273590)
+        MODE_Z( 2, 2, FORMAT_RAW12, 0,     965,   20, 0xffffff, 0x880, 4095,  240,   1514484)
+        MODE_Z( 3, 4, FORMAT_RAW08, 0,     348,   46, 0xffffff, 0x8a8,  255,   15,    553716)
+        MODE_Z( 4, 4, FORMAT_RAW10, 0,     425,   38, 0xffffff, 0x89e, 1023,   60,    673812)
+        MODE_Z( 5, 4, FORMAT_RAW12, 0,     502,   34, 0xffffff, 0x896, 4095,  240,    793692)
+
+        //binning
+        MODE_Z( 6, 2, FORMAT_RAW08, 1,     348,   48, 0xffffff, 0x488,  255,   15,    285444)
+        MODE_Z( 7, 2, FORMAT_RAW10, 1,     425,   40, 0xffffff, 0x47c, 1023,   60,    346140)
+        MODE_Z( 8, 2, FORMAT_RAW12, 1,     503,   36, 0xffffff, 0x474, 4095,  240,    406782)
+        MODE_Z( 9, 4, FORMAT_RAW08, 1,     194,   80, 0xffffff, 0x4b8,  255,   15,    164214)
+        MODE_Z(10, 4, FORMAT_RAW10, 1,     232,   68, 0xffffff, 0x4a8, 1023,   60,    194346)
+        MODE_Z(11, 4, FORMAT_RAW12, 1,     271,   60, 0xffffff, 0x498, 4095,  240,    224640)
+
+        // special registers for binning mode
+        BINNING_MODE_REGS(  6, { IMX56X_GMRWT, 0x08 }, { IMX56X_GMTWT, 0x2c }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x14 } );
+        BINNING_MODE_REGS(  7, { IMX56X_GMRWT, 0x08 }, { IMX56X_GMTWT, 0x24 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x10 } );
+        BINNING_MODE_REGS(  8, { IMX56X_GMRWT, 0x04 }, { IMX56X_GMTWT, 0x20 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x10 } );
+        BINNING_MODE_REGS(  9, { IMX56X_GMRWT, 0x0c }, { IMX56X_GMTWT, 0x4c }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x20 } );
+        BINNING_MODE_REGS( 10, { IMX56X_GMRWT, 0x0c }, { IMX56X_GMTWT, 0x40 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x1c } );
+        BINNING_MODE_REGS( 11, { IMX56X_GMRWT, 0x08 }, { IMX56X_GMTWT, 0x38 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x18 } );
+
+        BINNING_START(ctrl->binnings[0], 0, 0)
+                { IMX56X_HV_MODE, IMX56X_BINNING_MODE_DISABLE },
+                { IMX56X_EAV_SELECT, IMX56X_EAV_SELECT_VALUE }
+        BINNING_END(ctrl->binnings[0])
+
+        BINNING_START(ctrl->binnings[1], 2, 2)
+                { IMX56X_HV_MODE, IMX56X_BINNING_MODE_ENABLE },
+                { IMX56X_EAV_SELECT, IMX56X_EAV_SELECT_VALUE }
+        BINNING_END(ctrl->binnings[1])
+
+        ctrl->max_binning_modes_used = 1;
 
         ctrl->flags                     = FLAG_EXPOSURE_SONY;
         ctrl->flags                    |= FLAG_PREGIUS_S;
@@ -716,12 +792,12 @@ static void vc_init_ctrl_imx567(struct vc_ctrl *ctrl, struct vc_desc* desc)
         ctrl->flags                    |= FLAG_IO_ENABLED;
         ctrl->flags                    |= FLAG_TRIGGER_EXTERNAL | FLAG_TRIGGER_PULSEWIDTH |
                                           FLAG_TRIGGER_SELF | FLAG_TRIGGER_SINGLE;
+        ctrl->flags                    |= FLAG_USE_BINNING_INDEX;
 }
 
 // ------------------------------------------------------------------------------------------------
 //  Settings for IMX568 (Rev.04)
 //  5.1 MegaPixel Pregius S
-
 
 static void vc_init_ctrl_imx568(struct vc_ctrl *ctrl, struct vc_desc* desc)
 {
@@ -731,43 +807,87 @@ static void vc_init_ctrl_imx568(struct vc_ctrl *ctrl, struct vc_desc* desc)
 
         ctrl->csr.sen.blacklevel        = (vc_csr2) { .l = 0x35b4, .m = 0x35b5 };
         ctrl->csr.sen.vmax              = (vc_csr4) { .l = 0x30d4, .m = 0x30d5, .h = 0x30d6, .u = 0x0000 };
+        ctrl->csr.sen.hmax              = (vc_csr4) { .l = 0x30d8, .m = 0x30d9, .h = 0x0000, .u = 0x0000 };
         ctrl->csr.sen.mode              = (vc_csr2) { .l = 0x3000, .m = 0x3010 };
         ctrl->csr.sen.mode_standby      = 0x01;
         ctrl->csr.sen.mode_operating    = 0x00;
 
         FRAME(0, 0, 2464, 2064)
-        //                       hmax  vmax      vmax   vmax  blkl  blkl  retrigger
-        //                              min       max    def   max   def
-/*
-        MODE(0, 2, FORMAT_RAW08,  656,   26, 0xffffff, 0x88a,  255,   15,   1058562)
-        MODE(1, 2, FORMAT_RAW10,  810,   22, 0xffffff, 0x884, 1023,   60,   1273590)
-        MODE(2, 2, FORMAT_RAW12,  965,   20, 0xffffff, 0x880, 4095,  240,   1514484)
-        MODE(3, 4, FORMAT_RAW08,  348,   46, 0xffffff, 0x8a8,  255,   15,    553716)
-        MODE(4, 4, FORMAT_RAW10,  425,   38, 0xffffff, 0x89e, 1023,   60,    673812)
-        MODE(5, 4, FORMAT_RAW12,  502,   34, 0xffffff, 0x896, 4095,  240,    793692)
-*/
+        //all read out           binning  hmax  vmax      vmax   vmax  blkl  blkl  retrigger
+        //                        mode           min       max    def   max   def
+        MODE_Z( 0, 2, FORMAT_RAW08, 0,     656,   26, 0xffffff, 0x88a,  255,   15,   1058562)
+        MODE_Z( 1, 2, FORMAT_RAW10, 0,     810,   22, 0xffffff, 0x884, 1023,   60,   1273590)
+        MODE_Z( 2, 2, FORMAT_RAW12, 0,     965,   20, 0xffffff, 0x880, 4095,  240,   1514484)
+        MODE_Z( 3, 4, FORMAT_RAW08, 0,     348,   46, 0xffffff, 0x8a8,  255,   15,    553716)
+        MODE_Z( 4, 4, FORMAT_RAW10, 0,     425,   38, 0xffffff, 0x89e, 1023,   60,    673812)
+        MODE_Z( 5, 4, FORMAT_RAW12, 0,     502,   34, 0xffffff, 0x896, 4095,  240,    793692)
 
-        MODE(0, 2, FORMAT_RAW08,  656,   26, 0xffffff, 0x88a,  255,   15,   1058562)
-        MODE(1, 2, FORMAT_RAW10,  810,   22, 0xffffff, 0x884, 1023,   60,   1273590)
-        MODE(2, 2, FORMAT_RAW12,  965,   20, 0xffffff, 0x880, 4095,  240,   1514484)
-        MODE(3, 4, FORMAT_RAW08,  348,   46, 0xffffff, 0x8a8,  255,   15,    553716)
+        //binning
+        MODE_Z( 6, 2, FORMAT_RAW08, 1,     348,   48, 0xffffff, 0x488,  255,   15,    285444)
+        MODE_Z( 7, 2, FORMAT_RAW10, 1,     425,   40, 0xffffff, 0x47c, 1023,   60,    346140)
+        MODE_Z( 8, 2, FORMAT_RAW12, 1,     503,   36, 0xffffff, 0x474, 4095,  240,    406782)
+        MODE_Z( 9, 4, FORMAT_RAW08, 1,     194,   80, 0xffffff, 0x4b8,  255,   15,    164214)
+        MODE_Z(10, 4, FORMAT_RAW10, 1,     232,   68, 0xffffff, 0x4a8, 1023,   60,    194346)
+        MODE_Z(11, 4, FORMAT_RAW12, 1,     271,   60, 0xffffff, 0x498, 4095,  240,    224640)
 
-        MODE(4, 4, FORMAT_RAW10,  232,   44, 0xffffff, 0x4a8, 1023,   60,    673812)
-        
-        MODE(5, 4, FORMAT_RAW12,  502,   34, 0xffffff, 0x896, 4095,  240,    793692)
+        // special registers for binning mode
+        BINNING_MODE_REGS(  6, { IMX56X_GMRWT, 0x08 }, { IMX56X_GMTWT, 0x2c }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x14 } );
+        BINNING_MODE_REGS(  7, { IMX56X_GMRWT, 0x08 }, { IMX56X_GMTWT, 0x24 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x10 } );
+        BINNING_MODE_REGS(  8, { IMX56X_GMRWT, 0x04 }, { IMX56X_GMTWT, 0x20 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x10 } );
+        BINNING_MODE_REGS(  9, { IMX56X_GMRWT, 0x0c }, { IMX56X_GMTWT, 0x4c }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x20 } );
+        BINNING_MODE_REGS( 10, { IMX56X_GMRWT, 0x0c }, { IMX56X_GMTWT, 0x40 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x1c } );
+        BINNING_MODE_REGS( 11, { IMX56X_GMRWT, 0x08 }, { IMX56X_GMTWT, 0x38 }, { IMX56X_GAINDLY, 0x04 }, { IMX56X_GSDLY, 0x18 } );
 
         BINNING_START(ctrl->binnings[0], 0, 0)
                 { IMX56X_HV_MODE, IMX56X_BINNING_MODE_DISABLE },
                 { IMX56X_EAV_SELECT, IMX56X_EAV_SELECT_VALUE }
         BINNING_END(ctrl->binnings[0])
+
         BINNING_START(ctrl->binnings[1], 2, 2)
                 { IMX56X_HV_MODE, IMX56X_BINNING_MODE_ENABLE },
-                { IMX56X_EAV_SELECT, 0x00 }
-//                { IMX412_BINNING_WEIGHTING, IMX412_BINNING_WEIGHTING_AVG },
-//                { IMX412_BINNING_TYPE, 0x12 }
+                { IMX56X_EAV_SELECT, IMX56X_EAV_SELECT_VALUE }
         BINNING_END(ctrl->binnings[1])
 
+        ctrl->max_binning_modes_used = 1;
+
         ctrl->flags                     = FLAG_EXPOSURE_SONY;
+        ctrl->flags                    |= FLAG_PREGIUS_S;
+        ctrl->flags                    |= FLAG_INCREASE_FRAME_RATE;
+        ctrl->flags                    |= FLAG_IO_ENABLED;
+        ctrl->flags                    |= FLAG_TRIGGER_EXTERNAL | FLAG_TRIGGER_PULSEWIDTH |
+                                          FLAG_TRIGGER_SELF | FLAG_TRIGGER_SINGLE;
+        ctrl->flags                    |= FLAG_USE_BINNING_INDEX;
+}
+
+// ------------------------------------------------------------------------------------------------
+//  Settings for IMX900 (Rev.00)
+//  3.2 MegaPixel Pregius S
+
+static void vc_init_ctrl_imx900(struct vc_ctrl *ctrl, struct vc_desc* desc)
+{
+        INIT_MESSAGE("IMX900")
+
+        ctrl->gain                      = (vc_control) { .min =   0, .max =       480, .def =      0 };
+
+        ctrl->csr.sen.blacklevel        = (vc_csr2) { .l = 0x35b4, .m = 0x35b5 };
+        ctrl->csr.sen.vmax              = (vc_csr4) { .l = 0x30d4, .m = 0x30d5, .h = 0x30d6, .u = 0x0000 };
+        ctrl->csr.sen.mode              = (vc_csr2) { .l = 0x3000, .m = 0x3010 };
+        ctrl->csr.sen.mode_standby      = 0x01;
+        ctrl->csr.sen.mode_operating    = 0x00;
+
+        FRAME(0, 0, 2048, 1536)
+
+        //all read out           binning  hmax  vmax      vmax   vmax  blkl  blkl  retrigger
+        //                        mode           min       max    def   max   def
+        MODE_Z( 0, 2, FORMAT_RAW08, 0,     460,   68, 0xffffff, 1716,  255,   15,   1058562)
+        MODE_Z( 1, 2, FORMAT_RAW10, 0,     564,   56, 0xffffff, 1697, 1023,   60,   1273590)
+        MODE_Z( 2, 2, FORMAT_RAW12, 0,     667,   46, 0xffffff, 1681, 4095,  240,   1514484)
+        MODE_Z( 3, 4, FORMAT_RAW08, 0,     338,   92, 0xffffff, 1755,  255,   15,    553716)
+        MODE_Z( 4, 4, FORMAT_RAW10, 0,     364,   85, 0xffffff, 1743, 1023,   60,    673812)
+        MODE_Z( 5, 4, FORMAT_RAW12, 0,     610,   51, 0xffffff, 1689, 4095,  240,    793692)
+
+        ctrl->flags                     = FLAG_EXPOSURE_SONY;
+
         ctrl->flags                    |= FLAG_PREGIUS_S;
         ctrl->flags                    |= FLAG_INCREASE_FRAME_RATE;
         ctrl->flags                    |= FLAG_IO_ENABLED;
@@ -875,6 +995,7 @@ int vc_mod_ctrl_init(struct vc_ctrl* ctrl, struct vc_desc* desc)
         case MOD_ID_IMX566: vc_init_ctrl_imx566(ctrl, desc); break;
         case MOD_ID_IMX567: vc_init_ctrl_imx567(ctrl, desc); break;
         case MOD_ID_IMX568: vc_init_ctrl_imx568(ctrl, desc); break;
+        case MOD_ID_IMX900: vc_init_ctrl_imx900(ctrl, desc); break;
         case MOD_ID_OV7251: vc_init_ctrl_ov7251(ctrl, desc); break;
         case MOD_ID_OV9281: vc_init_ctrl_ov9281(ctrl, desc); break;
         default:

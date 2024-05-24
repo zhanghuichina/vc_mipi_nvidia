@@ -55,6 +55,7 @@
   * **Frame rate** can be set via V4L2 control 'frame_rate' *(except IMX412 and OV9281)*
   * **[Black level](doc/BLACK_LEVEL.md)** can be set via V4L2 control 'black_level' *(except IMX412, OV7251 and OV9281)*
   * **[ROI cropping](doc/ROI_CROPPING.md)** can be set via device tree properties active_l, active_t, active_w and active_h or v4l2-ctl.
+  * **[Binning](doc/BINNING.md)** can be set via V4L2 control 'binning_mode' *(IMX412 only)*
 
 ## Prerequisites for cross-compiling
 
