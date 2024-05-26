@@ -103,8 +103,7 @@ static __u8 i2c_read_reg(struct device *dev, struct i2c_client *client, const __
                 return ret;
         }
 
-//bazo
-//        vc_dbg(dev, "%s():   addr: 0x%04x => value: 0x%02x\n", func, addr, buf[0]);
+        vc_dbg(dev, "%s():   addr: 0x%04x => value: 0x%02x\n", func, addr, buf[0]);
 
         return buf[0];
 }
@@ -735,7 +734,6 @@ __u32 vc_core_get_optimized_vmax(struct vc_cam *cam)
                 return vmax_def;
         }
 
-// bazo test
         if (0 == state->binning_mode)
         {
                 // Increase the frame rate when image height is reduced.
@@ -804,6 +802,34 @@ int vc_core_get_mode_index(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8
         }
 
         return -1;
+}
+
+int write_binning_mode_regs(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning)
+{
+        struct vc_ctrl *ctrl = &cam->ctrl;
+        struct vc_state *state = &cam->state;
+        struct device *dev = &ctrl->client_sen->dev;
+        struct i2c_client *client = ctrl->client_sen;
+
+        int iTmp = 0;
+        int mode_index = -1;
+        int ret = 0;
+
+        if (0 < state->binning_mode)
+        {
+                mode_index = vc_core_get_mode_index(cam, state->num_lanes, format, state->binning_mode);
+                if ((0 <= mode_index) && (mode_index < MAX_VC_MODES) && (ctrl->flags & FLAG_USE_BINNING_INDEX))
+                {
+                        for (iTmp = 0; iTmp < MAX_BINNING_MODE_REGS; iTmp++)
+                        {
+                                ret |= i2c_write_reg(dev, client, ctrl->mode[mode_index].binning_mode_regs[iTmp].address, ctrl->mode[mode_index].binning_mode_regs[iTmp].value, __FUNCTION__);
+                        }
+
+                        ret |= i2c_write_reg4(dev, client, &ctrl->csr.sen.hmax, ctrl->mode[mode_index].hmax, __FUNCTION__);
+                }
+        }
+
+        return ret;
 }
 
 vc_control vc_core_get_vmax(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning)
@@ -1494,8 +1520,6 @@ int vc_sen_set_roi(struct vc_cam *cam)
         __u8 format = vc_core_v4l2_code_to_format(state->format_code);
         int w_left, w_top, w_right, w_bottom, w_width, w_height, o_width, o_height;
         int ret = 0;
-        int mode_index = -1;
-        int iTmp = 0;
         vc_csr2 vc2OP_BLK_HWIDTH = (vc_csr2) { .l = 0x30d0, .m = 0x30d1 };
         vc_csr2 vc2INFO_HWIDTH   = (vc_csr2) { .l = 0x30d2, .m = 0x30d3 };
 
@@ -1530,27 +1554,7 @@ int vc_sen_set_roi(struct vc_cam *cam)
                 ret |= i2c_write_reg2(dev, client, &vc2OP_BLK_HWIDTH, o_width, __FUNCTION__);
                 ret |= i2c_write_reg2(dev, client, &vc2INFO_HWIDTH, o_width, __FUNCTION__);
 
-//bazo
-//function write_binning_mode_regs()...
-
-                mode_index = vc_core_get_mode_index(cam, state->num_lanes, format, state->binning_mode);
-                if ((0 <= mode_index) && (mode_index < MAX_VC_MODES) && (ctrl->flags & FLAG_USE_BINNING_INDEX))
-                {
-//                        vc_err(dev, "%s(): Couldn't get mode index: %d \n", __FUNCTION__, mode_index);
-//                        return mode_index;
-
-                        if (0 < state->binning_mode)
-                        {
-                                for (iTmp = 0; iTmp < MAX_BINNING_MODE_REGS; iTmp++)
-                                {
-                                        ret |= i2c_write_reg(dev, client, ctrl->mode[mode_index].binning_mode_regs[iTmp].address, ctrl->mode[mode_index].binning_mode_regs[iTmp].value, __FUNCTION__);
-                                }
-                        }
-
-                        ret |= i2c_write_reg4(dev, client, &ctrl->csr.sen.hmax, ctrl->mode[mode_index].hmax, __FUNCTION__);
-
-                }
-//...write_binning_mode_regs()
+                ret |= write_binning_mode_regs(cam, state->num_lanes, format, state->binning_mode);
 
         } else {
                 ret |= i2c_write_reg2(dev, client, &ctrl->csr.sen.h_end, w_right, __FUNCTION__);

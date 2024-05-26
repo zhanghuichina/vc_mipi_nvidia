@@ -7,7 +7,7 @@
 #include "vc_mipi_core.h"
 #include "vc_mipi_modules.h"
 
-#define VERSION "0.17.0_Binning_Fin"
+#define VERSION "0.17.0"
 // #define VC_CTRL_VALUE
 
 
