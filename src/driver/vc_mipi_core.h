@@ -160,7 +160,6 @@ typedef struct vc_mode {
         vc_control vmax;
         vc_control blacklevel;
         __u32      retrigger_min;
-//        struct vc_reg regs[8];
         struct vc_reg binning_mode_regs[MAX_BINNING_MODE_REGS];
 } vc_mode;
 
@@ -222,9 +221,6 @@ struct vc_state {
         int power_on;
         int streaming;
         __u8 flags;
-
-
-//        __u32 retrigger_tmp;
 };
 
 struct vc_cam {
@@ -244,7 +240,6 @@ struct device *vc_core_get_mod_device(struct vc_cam *cam);
 int vc_core_try_format(struct vc_cam *cam, __u32 code);
 int vc_core_set_format(struct vc_cam *cam, __u32 code);
 __u32 vc_core_get_format(struct vc_cam *cam);
-//int vc_core_set_frame(struct vc_cam *cam, __u32 x, __u32 y, __u32 width, __u32 height);
 int vc_core_set_frame(struct vc_cam *cam, __u32 left, __u32 top, __u32 width, __u32 height);
 int vc_core_set_frame_size(struct vc_cam *cam, __u32 width, __u32 height);
 int vc_core_set_frame_position(struct vc_cam *cam, __u32 left, __u32 top);
@@ -280,18 +275,8 @@ int vc_sen_set_gain(struct vc_cam *cam, int gain);
 
 int vc_sen_set_blacklevel(struct vc_cam *cam, __u32 blacklevel);
 
-
-//int vc_sen_set_retrigger(struct vc_cam *cam, __u32 retrigger);
-
-
-//int vc_sen_set_binning_mode(struct vc_cam *cam, __u32 binning_mode);
 int vc_sen_set_binning_mode(struct vc_cam *cam, int mode);
 int vc_sen_start_stream(struct vc_cam *cam);
 int vc_sen_stop_stream(struct vc_cam *cam);
-
-
-
-//int vc_sen_set_binning565(struct vc_cam *cam);
-
 
 #endif // _VC_MIPI_CORE_H
