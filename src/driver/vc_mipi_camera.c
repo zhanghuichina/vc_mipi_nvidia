@@ -10,7 +10,6 @@
 #define VERSION "0.17.0"
 // #define VC_CTRL_VALUE
 
-
 static struct vc_cam *tegracam_to_cam(struct tegracam_device *tc_dev)
 {
         return (struct vc_cam *)tegracam_get_privdata(tc_dev);
