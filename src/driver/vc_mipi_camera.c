@@ -143,7 +143,7 @@ void vc_update_image_size_from_mode(struct tegracam_device *tc_dev,  __u32 *left
         }
 }
 
-#if defined(VC_MIPI_JETSON_NANO) && defined(VC_MIPI_L4T_32_7_4)
+#if defined(VC_MIPI_JETSON_NANO) && defined(VC_MIPI_L4T_32_7_5)
 int vc_set_channel_trigger_mode(struct tegracam_device *tc_dev, __u8 trigger_mode)
 {
         struct tegra_channel *chan = NULL;
@@ -400,7 +400,7 @@ static int vc_set_trigger_mode(struct tegracam_device *tc_dev, __s64 val)
         int ret = vc_mod_set_trigger_mode(cam, val);
         vc_update_tegra_controls(tc_dev);
 
-#if defined(VC_MIPI_JETSON_NANO) && defined(VC_MIPI_L4T_32_7_4)
+#if defined(VC_MIPI_JETSON_NANO) && defined(VC_MIPI_L4T_32_7_5)
         ret = vc_set_channel_trigger_mode(tc_dev, (__u8)val);
 #endif
 
@@ -792,7 +792,7 @@ static int vc_probe(struct i2c_client *client, const struct i2c_device_id *id)
         struct device *dev = &client->dev;
         struct vc_cam *cam;
         struct tegracam_device *tc_dev;
-#if defined(VC_MIPI_JETSON_NANO) && defined(VC_MIPI_L4T_32_7_4)
+#if defined(VC_MIPI_JETSON_NANO) && defined(VC_MIPI_L4T_32_7_5)
         struct camera_common_data *common_data;
 #endif
         int ret;
@@ -808,7 +808,7 @@ static int vc_probe(struct i2c_client *client, const struct i2c_device_id *id)
         if (!tc_dev)
                 return 0;
 
-#if defined(VC_MIPI_JETSON_NANO) && defined(VC_MIPI_L4T_32_7_4)
+#if defined(VC_MIPI_JETSON_NANO) && defined(VC_MIPI_L4T_32_7_5)
         common_data = devm_kzalloc(&client->dev, sizeof(struct camera_common_data), GFP_KERNEL);
         if (!common_data) {
                 return -ENOMEM;

@@ -137,6 +137,7 @@ bsps=(
 "NVIDIA L4T 32.7.2 (https://developer.nvidia.com/embedded/linux-tegra-r3272)"
 "NVIDIA L4T 32.7.3 (https://developer.nvidia.com/embedded/linux-tegra-r3273)"
 "NVIDIA L4T 32.7.4 (https://developer.nvidia.com/embedded/linux-tegra-r3274)"
+"NVIDIA L4T 32.7.5 (https://developer.nvidia.com/embedded/linux-tegra-r3275)"
 "NVIDIA L4T 35.1.0 (https://developer.nvidia.com/embedded/jetson-linux-r351)"
 "NVIDIA L4T 35.2.1 (https://developer.nvidia.com/embedded/jetson-linux-r3521)"
 "NVIDIA L4T 35.3.1 (https://developer.nvidia.com/embedded/jetson-linux-r3531)"
@@ -149,6 +150,7 @@ bsps_keys=(
 "32.7.2"
 "32.7.3"
 "32.7.4"
+"32.7.5"
 "35.1.0"
 "35.2.1"
 "35.3.1"
@@ -212,7 +214,7 @@ setup_driver() {
                 ;;
         Nano|NanoSD)
                 choose_board 1 4 5
-                choose_bsp 0 1 2 3
+                choose_bsp 0 1 2 3 4
                 ;;
         XavierNX|XavierNXSD) 
                 choose_board 2 4 5

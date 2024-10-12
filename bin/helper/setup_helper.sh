@@ -72,8 +72,10 @@ download_and_check_file () {
                         fi
 
                         if [[ -z $URL_UNRESOLVED_VAR ]]; then
+				echo "download1 $URL_VAR/$FILE_VAR"
                                 wget $URL_VAR/$FILE_VAR
                         else
+				echo "download2 $FILE_VAR $URL_UNRESOLVED_VAR"
                                 wget -O $FILE_VAR $URL_UNRESOLVED_VAR
                         fi
 

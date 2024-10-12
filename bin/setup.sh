@@ -29,16 +29,7 @@ reconfigure() {
 install_system_tools() {
         echo "Setup system tools."
         sudo apt update
-        sudo apt install -y build-essential
-        sudo apt install -y python2.7
-        sudo apt install -y qemu-user-static
-        sudo apt install -y libxml2-utils
-        sudo apt install -y git
-        sudo apt install -y flex
-        sudo apt install -y bison
-        sudo apt install -y libssl-dev
-        sudo apt install -y python3-pip
-        sudo apt install -y kmod
+        sudo apt install -y build-essential python2.7 qemu-user-static libxml2-utils git flex bison libssl-dev python3-pip kmod
 }
 
 setup_toolchain() {
@@ -325,9 +316,9 @@ while [ $# != 0 ] ; do
                 ;;
         -o|--host)
                 configure
-                install_system_tools
-                setup_toolchain
-                setup_user_credentials
+                #install_system_tools
+                #setup_toolchain
+                #setup_user_credentials
                 setup_bsp
 # If the user likes to pre-install the test directory with test scripts 
 # in the configured user-home directory of the target system,
